@@ -1,0 +1,44 @@
+pipeline {
+agent any
+
+environment {
+IMAGE_NAME = 'my-image'
+DOCKER_REGISTRY = 'my-registry.com'
+DOCKER_IMAGE = "${DOCKER_REGISTRY}/${IMAGE_NAME}"
+ENV_VAR1 = 'value1'
+ENV_VAR2 = 'value2'
+}
+
+stages {
+stage('Build') {
+steps {
+sh 'mvn clean package'
+}
+}
+
+stage('Push to Docker') {
+steps {
+sh "docker build -t ${DOCKER_IMAGE} ."
+sh "docker push ${DOCKER_IMAGE}"
+}
+}
+
+stage('Run Docker Container') {
+steps {
+sh "docker run -d -e ENV_VAR1 -e ENV_VAR2 ${DOCKER_IMAGE} /bin/sh -c 'while true; do sleep 3600; done &'"
+}
+}
+
+stage('Run Integration Tests') {
+steps {
+sh 'docker exec -it $(docker ps -q -f "ancestor=${DOCKER_IMAGE}" -f "published=true" -f "status=running" -f "name=${IMAGE_NAME}_" -o %s) mvn verify'
+}
+}
+}
+
+post {
+success {
+junit 'target/surefire-reports/*
+}
+}
+}
